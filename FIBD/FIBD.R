@@ -4,18 +4,27 @@ setwd(paste0("~/Documents/Rosalind/", problem))
 
 # Problem Name
 samplepath <- paste0(problem, "_sample.txt")
-inputpath <- paste0(problem, "_ds.txt")
+inputpath <- paste0("rosalind_", problem,".txt")
 
-funcName <- function(a, b){
-  # BODY
+# Assuming all rabbits produce a single pair of offspring
+fibd <- function(n, m){
+  month <- 2
+  if (n <= 2){
+    F_n <- 1
+  } else if (month = 1){
+    
+  }
+    F_n <- fibd(n-m, m) + fibd(n-(m-1), m)
+  }
+  F_n
 }
 
-funcWrap <- function(inputFile){
+fibdWrap <- function(inputFile){
   ds <- readLines(inputFile)
   ds <- unlist(strsplit(ds, split = " ")[[1]])
-  a <- as.numeric(ds[1])
-  b <- as.numeric(ds[2])
-  out <- as.character(funcName(a, b))
+  n <- as.numeric(ds[1])
+  m <- as.numeric(ds[2])
+  out <- as.character(fibd(n, m))
   print(out)
   
   outfile <- file(paste0(problem, "_submission.txt"))
@@ -23,5 +32,5 @@ funcWrap <- function(inputFile){
   close(outfile)
 }
 
-funcWrap(samplepath)
-funcWrap(inputpath)
+fibdWrap(samplepath)
+fibdWrap(inputpath)
