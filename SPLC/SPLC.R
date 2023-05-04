@@ -6,26 +6,30 @@ setwd(paste0("~/Documents/Rosalind/", problem))
 samplepath <- paste0(problem, "_sample.txt")
 inputpath <- tolower(paste0("rosalind_", problem, ".txt"))
 
-# library(Biostrings)
+library(Biostrings)
 
-dna <- "GATGGAACTTGACTACGTAAATT"
-
-DNA2RNA <- function(dna){
-  dna_spl <- strsplit(dna, "")[[1]]
-  rna = ""
-  for (nuc in dna_spl){
-    rna <- paste0(rna, ifelse(nuc == 'T', 'U', nuc))
-  }
-  return(rna)
-}
-
-SPLC <- function(a, b){
+SPLC <- function(inputFile){
   set <- Biostrings::readDNAStringSet(inputFile)
   str_DNA <- as.character(set[1])
+  str_introns <- as.character(set[2:length(set)])
+  # Splice / remove introns
+  for (intron in str_introns){
+    str_DNA <- gsub(intron, "", str_DNA)
+  }
+  # Transcribe (with codon table from Biostrings)
+  AAs <- ""
+  codons <- ""
+  for (idx in 1:(nchar(str_DNA)-1)){
+    if (((idx+2) %% 3) == 0){
+      codon <- substring(str_DNA, idx, idx+2)
+      codons <- paste0(codons, codon)
+      AAs <- paste0(AAs, GENETIC_CODE[codon])
+    }
+  }
+  return(gsub("\\*", "", AAs))
 }
+
 inputFile <- samplepath
-
-
 SPLCWrap <- function(inputFile){
   # ds <- readLines(inputFile)
   # ds <- unlist(strsplit(ds, split = " ")[[1]])

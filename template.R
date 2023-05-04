@@ -6,18 +6,18 @@ setwd(paste0("~/Documents/Rosalind/", problem))
 samplepath <- paste0(problem, "_sample.txt")
 inputpath <- tolower(paste0("rosalind_", problem, ".txt"))
 
-funcName <- function(a, b){
+FUNC <- function(a, b){
   # BODY
 }
 
 inputFile <- samplepath
 
-funcWrap <- function(inputFile){
+FUNCwrap <- function(inputFile){
   ds <- readLines(inputFile)
   ds <- unlist(strsplit(ds, split = " ")[[1]])
   a <- as.numeric(ds[1])
   b <- as.numeric(ds[2])
-  out <- as.character(funcName(a, b))
+  out <- as.character(FUNC(a, b))
   print(out)
   
   outfile <- file(paste0(problem, "_submission.txt"))
@@ -25,5 +25,5 @@ funcWrap <- function(inputFile){
   close(outfile)
 }
 
-funcWrap(samplepath)
-funcWrap(inputpath)
+FUNCwrap(samplepath)
+FUNCwrap(inputpath)
