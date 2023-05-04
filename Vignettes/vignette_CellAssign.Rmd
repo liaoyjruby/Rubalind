@@ -1,0 +1,156 @@
+
+```{r setup}
+tensorflow::tf_config() # version 2
+devtools::install_github("liaoyjruby/cellassign") # Forked to fix error
+
+library(SingleCellExperiment)
+library(cellassign)
+```
+
+# Assigning single-cells to known cell types with CellAssign
+
+## Basic usage
+
+Example `SingleCellExperiment`
+- 200 genes
+- 500 cells
+
+True cell types: Group1 & Group2
+
+Example gene-by-cell-type binary matrix
+- `1` if gene is marker for given cell type
+- `0` otherwise
+
+```{r Load example data}
+data(example_sce)
+print(example_sce)
+
+# True cell types annotated in `Group`
+print(head(example_sce$Group))
+#> [1] "Group1" "Group2" "Group2" "Group1" "Group1" "Group1"
+
+# Example gene-by-cell-type binary matrix
+data(example_marker_mat)
+print(example_marker_mat)
+```
+Size factors for each cell
+- stored in `sizeFactors(example_sce)`
+- recommended to compute w/ `computeSumFactors` function from `scran` package
+- highly rec to compute size factors using full set of genes, before subsetting to markers for input to cellassign
+```{r Size factors}
+s <- sizeFactors(example_sce)
+```
+
+Call CellAssign
+- !! gene expression data containing only marker genes used as input to cellassign
+- subset input `SingleCellExperiment` using rownames (gene names) of marker mtx
+- ensure that order of genes in gen eexp data matches order of genes in marker mtx
+```{r Call CellAssign}
+fit <- cellassign(exprs_obj = example_sce[rownames(example_marker_mat),], 
+                  marker_gene_info = example_marker_mat, 
+                  s = s, 
+                  learning_rate = 1e-2, 
+                  shrinkage = TRUE,
+                  verbose = FALSE)
+```
+
+`cellassign` object
+- `celltypes`: maximum likelihood estimates (MLE) of cell type
+- `mleparams`: all MLE parameters
+```{r Access CellAssign object}
+print(fit)
+
+print(head(celltypes(fit))) # MLE of cell type
+
+print(str(mleparams(fit))) # all MLE params
+```
+
+```{r Probability matrix}
+# Visualize probabilities of assignments
+pheatmap::pheatmap(cellprobs(fit))
+```
+
+```{r Check concordance with true values}
+print(table(example_sce$Group, celltypes(fit)))
+```
+
+## Example marker set for TME
+
+List of two marker lists
+- `symbol`: gene symbols
+- `ensembl`: ensembl gene ids
+
+```{r Access example set}
+data(example_TME_markers)
+names(example_TME_markers)
+
+lapply(head(example_TME_markers$symbol, n = 4), head, n = 4)
+lapply(head(example_TME_markers$ensembl, n = 4), head, n = 4)
+```
+
+```{r Convert list to binary marker by cell type matrix}
+marker_mat <- marker_list_to_mat(example_TME_markers$ensembl)
+
+marker_mat[1:3, 1:3]
+```
+
+Important: the single cell experiment or input gene expression matrix should be subset accordingly to match the rows of the marker input matrix
+
+e.g. if sce is a SingleCellExperiment with ensembl IDs as rownames then call
+- the rows in the single cell experiment or gene expression matrix should be ordered identically to those in the marker input matrix.
+```{r ex. subset SCE to marker input matrix}
+sce_marker <- sce[intersect(rownames(marker_mat), rownames(sce)),]
+```
+
+## Constructing marker gene mtx
+
+- encodes  a priori knowledge of cell types
+
+For two types of cells (Group1 and Group2) we know a priori several good marker genes, e.g.:
+Cell type	Genes
+Group1	Gene186, Gene269, Gene526, Gene536, Gene994
+Group2	Gene205, Gene575, Gene754, Gene773, Gene949
+
+- turn into named list
+- names are the cell types
+- entries are marker genes for each cell type
+  - not necessarily mutually exclusive
+  
+Can then directly provide to `cellassign` or turn into binary marker gene mtx first w/ `marker_list_to_mat`
+
+Auto includes `other` group for cells that don't fall into either type
+- can exclude by setting `include_other = FALSE`
+
+```{r Marker gene list}
+marker_gene_list <- list(
+  Group1 = c("Gene186", "Gene269", "Gene526", "Gene536", "Gene994"),
+  Group2 = c("Gene205", "Gene575", "Gene754", "Gene773", "Gene949")
+)
+
+print(str(marker_gene_list))
+
+print(marker_list_to_mat(marker_gene_list))
+```
+
+## Adding covariates
+
+Covariates corresponding to batch, sample, or patient-specific effects can be included in the cellassign model. 
+
+ex. two covariates x1 and x2
+```{r Covariates}
+N <- ncol(example_sce)
+x1 <- rnorm(N)
+x2 <- rnorm(N)
+
+# Design matrix using `model.matrix`
+X <- model.matrix(~ 0 + x1 + x2) # explicitly set no intercept w/ 0
+
+fit <- cellassign(exprs_obj = example_sce[rownames(example_marker_mat),], 
+                  marker_gene_info = example_marker_mat, 
+                  X = X,
+                  s = s, 
+                  learning_rate = 1e-2, 
+                  shrinkage = TRUE,
+                  verbose = FALSE)
+```
+

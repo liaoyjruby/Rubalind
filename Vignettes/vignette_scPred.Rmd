@@ -1,0 +1,215 @@
+
+# Introduction to scPred
+https://powellgenomicslab.github.io/scPred/articles/introduction.html
+
+`scPred` is a general method to classify cells based on a low-dimensional representation of gene expression (e.g. PCA).
+
+```{r Load packages}
+library("scPred")
+library("Seurat")
+library("magrittr")
+```
+In tutorial:
+1. Use PBMCs from one individual to build cell classifiers for the populations of interest
+2. Apply models to independent dataset of PBMCs from another independent individual
+```{r Load sobjs}
+reference <- scPred::pbmc_1
+query <- scPred::pbmc_2
+```
+
+`scPred` integrated into Seurat framework
+Similar to clustering in Seurat, scPred uses the cell embeddings from a principal component analysis to make inferences about cell-type identity. However —unlike clustering—, scPred trains classifiers for each cell type of interest in a supervised manner by using the known cell identity from a reference dataset to guide the classification of cells in a different data set.
+
+The following code:
+1. Normalizes the gene expression data from the reference data set weighting by the counts by the “sequencing depth” of each cell and applying a natural logarithmic transformation
+2. Finds a set of variable features by modeling the mean and variance log-transformed expression
+3. Scales the expression of each gene bu subtracting the mean expression across all cells and dividing by the standard deviation
+4. Runs a PCA
+5. Runs a UMAP using the top 30 most variable PCs
+
+```{r Seurat pipeline}
+reference <- reference %>% 
+  NormalizeData() %>% 
+  FindVariableFeatures() %>% 
+  ScaleData() %>% 
+  RunPCA() %>% 
+  RunUMAP(dims = 1:30)
+```
+
+Column `cell_type` contains ID of each cell in meta data slot
+
+```{r UMAP by cell type}
+DimPlot(reference, group.by = "cell_type", label = TRUE, repel = TRUE)
+```
+
+# Classifier Training
+
+- Get feature space to train classifiers
+- default: use all principal components
+- reference labels of each cell specified as 2nd parameter value of function
+  - `cell_type` column
+  
+`getFeatureSpace`: create `scPred` object stored in `@misc` slot
+- contains all required info to classify cells
+
+`trainModel`: train classifiers for each cell
+- by default, use SVM w/ radial kernel
+
+```{r Train classifier}
+# Get feature space to train classifiers
+reference <- getFeatureSpace(reference, "cell_type")
+# Train classifier for each cell
+reference <- trainModel(reference)
+```
+
+`get_probabilities`: access training probabilities for each cell in ref data
+
+`get_scpred`: retrieve `scPred` object from `Seurat` object
+- printing shows for each cell type
+  - # of cells
+  - # of features used to train model
+  - prediction model (method)
+  - performance metrics
+
+`plot_probabilities`: visualize performance for each cell type
+- observe lower performance for classical monocytes (cMono) & non-classical monocytes (ncMono)
+
+```{r Access classifier}
+# Access training probabilities for each cell in ref data
+get_probabilities(reference) %>% head()
+# Retrieve scPred obj
+get_scpred(reference)
+# Visualize cell type performance
+plot_probabilities(reference)
+```
+
+`caret` models
+- depending on data, other models may perform better
+- can use large set of prediction models available in `caret`
+- https://topepo.github.io/caret/available-models.html
+- specify model in `model` parameter + provide *method value* from `caret`
+  - ex. `mda` for mixture discriminant analysis using `mda` package
+- if only applying model (ex. `mda`) to subset of cells, specify w/ `reclassify` parameter
+
+Ex. train diff models for "cMono" + "ncMono" to improve classification performance
+```{r Other models}
+# Train mda for 2 cell types, preserve prev. SVM for remaining cell types
+reference <- trainModel(reference, model = "mda", reclassify = c("cMono", "ncMono"))
+# See change in sensitivity for "cMono" & "ncMono"
+get_scpred(reference)
+# Verify by probabilities plot
+plot_probabilities(reference)
+```
+
+# Cell Classification
+
+!! `reference` & `query`: must use **same normalization method**
+
+```{r Normalize query dataset}
+query <- NormalizeData(query)
+```
+
+`scPredict`: classify cells from `query` data
+- 1st arg: `query` object
+- 2nd arg: `reference` object, w/ scPred model trained already
+- returns query dataset
+- stores final classifications in `scpred_prediction` column of Seurat metadata
+- stores aligned data as `scpred` reduction
+
+- uses `Harmony` to align query data onto training low-dimensional space used as reference
+- once aligned, cells classified using pre-trained models
+
+```{r scPredict}
+query <- scPredict(query, reference)
+```
+
+```{r Plot classifications over aligned data}
+DimPlot(query, group.by = "scpred_prediction", reduction = "scpred")
+# UMAP of aligned data
+query <- RunUMAP(query, reduction = "scpred", dims = 1:30)
+DimPlot(query, group.by = "scpred_prediction", label = TRUE, repel = TRUE)
+# Compare results with original labels
+DimPlot(query, group.by = "cell_type", label = TRUE, repel = TRUE)
+```
+
+```{r Visualize scPred probabilities, fig.width=6, fig.height=5}
+FeaturePlot(query, c("scpred_B.cell",
+                     "scpred_CD4.T.cell",
+                     "scpred_CD8.T.cell", 
+                     "scpred_cMono",
+                     "scpred_ncMono",
+                     "scpred_Plasma.cell", 
+                     "scpred_cDC",
+                     "scpred_pDC"))
+```
+
+```{r crossTab contingency table}
+crossTab(query, "cell_type", "scpred_prediction")
+# crossTab w/ proportion of cells
+crossTab(query, "cell_type", "scpred_prediction", output = "prop") 
+```
+
+# Advanced options
+
+## Accessing classifiers
+
+`get_classifiers`: retrieve raw models for each cell type
+- return list of `train` objects
+- each model usable in `caret` environment
+```{r get_classifiers}
+get_classifiers(reference)
+# Plot performance resamples using caret::plot.train
+caret::plot.train(get_classifiers(reference)[["NK cell"]])
+```
+
+## Using different prediction model approach
+
+`model` parameter
+- provide distinct *method value* of type **classification** as handled by caret
+
+Ex. train logistic regression via `glm` for each cell type
+```{r glm model}
+reference <- trainModel(reference, model = "glm")
+get_scpred(reference)
+```
+
+## Avoid aligning data multiple times
+
+- training + aligning are *separate* processes
+- if `query` dataset already aligned to `reference` via scPred/harmony + prediction models have changed, use `recompute_alignment = FALSE` to avoid aligning step
+  - alignment already stored in `query` obj
+```{r Don't realign}
+# Will only apply classification models
+query <- scPredict(query, reference, recompute_alignment = FALSE)
+```
+
+## Using different probability threshold
+
+default: relaxed probability threshold of `0.55` to label
+- if none of classifiers provide probability higher than threshold for given cell, labelled as "unassigned"
+- tune via `threshold` parameter
+- if binary classification (2 cell types), threshold of 0.5 implies no unassigned labeling
+```{r Probability threshold}
+query <- scPredict(query, reference, recompute_alignment = FALSE, threshold = 0.9)
+```
+
+## Parallelize training
+- computational performance dependent on sample size of ref dataset + number of cell types
+- can parallelize resampling w/ `doParallel`
+- via `caret` parellel processing: https://topepo.github.io/caret/parallel-processing.html
+```{r doParallel}
+library(doParallel)
+cl <- makePSOCKcluster(2) # 2 cores
+registerDoParallel(cl)
+# allowParallel must be TRUE
+reference <- trainModel(reference, model = "mda", allowParallel = TRUE)
+```
+
+## Applying scPred classifiers w/o Seurat object
+- if final `scPred` model obtained, can extract `scPred` object from `Seurat` and apply classifiers in other dataset
+
+```{r scpred object classifier}
+scpred <- get_scpred(reference)
+query <- scPredict(query, scpred)
+```
+

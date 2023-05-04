@@ -1,0 +1,227 @@
+
+# Beginner's guide to using the DESeq2 package
+
+The purpose of the experiment was to investigate the role of the estrogen receptor in parathyroid tumors. The investigators derived primary cultures of parathyroid adenoma cells from 4 patients. These primary cultures were treated with diarylpropionitrile (DPN), an estrogen receptor β agonist, or with 4-hydroxytamoxifen (OHT). RNA was extracted at 24 hours and 48 hours from cultures under treatment and control. The blocked design of the experiment allows for statistical analysis of the treatment effects while controlling for patient-to-patient variation.
+
+## Starting from SummarizedExperiment
+```{r Load DESeq and data}
+library("DESeq2")
+library("parathyroidSE")
+
+data("parathyroidGenesSE")
+se <- parathyroidGenesSE
+colnames(se) <- se$run
+```
+
+```{r Build DESeqDataSet from SummarizedExperiment}
+ddsFull <- DESeqDataSet(se, design = ~ patient + treatment)
+```
+
+## Starting from count table
+```{r Extract count data + metadata from SE obj}
+# Counts
+countdata <- assay(parathyroidGenesSE)
+head(countdata)
+
+# Metadata
+coldata <- colData(parathyroidGenesSE)
+rownames(coldata) <- coldata$run
+colnames(countdata) <- coldata$run
+
+head(coldata[,c("patient", "treatment", "time")])
+```
+
+```{r Construct data obj from cts + metadata}
+ddsFullCountTable <- DESeqDataSetFromMatrix(
+  countData = countdata,
+  colData = coldata,
+  design = ~ patient + treatment
+  )
+```
+
+```{r Collapsing technical replicates}
+as.data.frame(colData(ddsFull)[,c("sample", "patient", "treatment", "time")])
+# SRS308873 sequenced twice - add together technical replicates so we have one column per sample
+
+ddsCollapsed <- collapseReplicates(ddsFull,
+                                   groupby = ddsFull$sample,
+                                   run = ddsFull$run)
+
+head(as.data.frame(colData(ddsCollapsed)[,c("sample", "runsCollapsed")]), 12)
+
+# Confirm cts for new obj = to summed up counts of column w/ same value for grouping factor
+original <- rowSums(counts(ddsFull)[,ddsFull$sample == "SRS308873"])
+all(original == counts(ddsCollapsed)[,"SRS308873"])
+```
+## Running DESeq2 pipeline
+
+Analyzing subset of samples
+- those taken after 48 hrs, with either ctrl, DPN, or OHT treatment
+- take into account multifactor design
+
+```{r Prepare data obj for analysis of interest}
+# Subset relevant columns
+dds <- ddsCollapsed[,ddsCollapsed$time == "48h"]
+# Drop levels of factors if samples for 1+ factor level in design removed
+dds$time <- droplevels(dds$time) # EX if time was included in design formula
+
+# Convenient to make sure Control is *first* level in treatment factor
+# - Default log2 fold changes calculated as treatment over control
+# - Use "relevel" function
+dds$treatment <- relevel(dds$treatment, "Control")
+as.data.frame(colData(dds))
+```
+Steps
+- estimation of size factors (control for differences in library size of seq experiments)
+- estimation of dispersion for each gene
+- fitting generalized linear model
+-> Returns DESeqDataSet w/ all fitted info in it
+```{r Run DESeq2 analysis}
+dds <- DESeq(dds)
+```
+
+## Extracting DESeq Results
+
+Calling `results` w/o args
+-> Extract estimated log2 fold changes + p values for last variable in design formula
+- If 2+ levels for this variable, `results` extracts results table for comparison of last level over first level
+```{r Extract results}
+res <- results(dds)
+res
+```
+`res` is `DataFrame` obj -> incl metadata with info on the meaning of columns
+- baseMean: avg of normalized ct values, dividing by size factors, taken over all samples
+
+other cols -> specific contrast, comparison of "DPN" vs "Control" of factor var "treatment"
+- log2FoldChange: effect size estimate; how much gene's expression seems to have changed due to treatment with DPN in comparison to control
+  - reported on log2 scale -> log2FC 1.5 = gene exp increased by 2^{1.5} = 2.82
+- lfcSE: standard error estimate for log2FC estimate
+
+for each gene, DESeq2 performs hypothesis test
+- see if evidence sufficient to conclude that value != zero
+- null hypothesis: no effect of treatment on gene, observed difference btwn trt and ctrl caused by experimental variability
+
+- pvalue: indicates probability that FC as strong as observed one, or even stronger, would be see under the situation of null hypothesis
+  - if `NA`, all counts for gene were zero so test not applied or gene excluded from analysis due to extreme count outlier
+```{r Results columns}
+mcols(res, use.names = T)
+```
+
+## Comparisons
+
+Generally, comparison of two levels -> use `contrast` argument to `results`
+Specify 3 values:
+- name of variable
+- name of level in numerator
+- name of level in denominator
+
+Ex. extract log2FC of DPN / Control
+```{r DPN/Control log2FC}
+res <- results(dds, contrast = c("treatment", "DPN", "Control"))
+res
+```
+
+### Multiple testing
+Benjamini-Hochberg (BH) adjustment: calculates for each gene an adjusted p value which answers the following question: if one called significant all gnees with a p value less than or equal to this gene's p value threshold, what would be the fraction of false positives (false discovery rate, FDR) among them?
+```{r # of genes w/ unadjusted p value < 0.01}
+sum(res$pvalue < 0.01, na.rm = T)
+table(is.na(res$pvalue))
+```
+
+BH-adjusted p value -> consider fraction of 10% false positives acceptable
+```{r # of genes with adjusted p value < 0.1 is significant}
+sum(res$padj < 0.1, na.rm = T)
+```
+
+Subset results to these padj < 0.1 genes, then sort by log2FC estimate to get significant genes w/ strongest down-regulation
+```{r padj subset log2FC downreg}
+resSig <- res[which(res$padj < 0.1),]
+head(resSig[order(resSig$log2FoldChange),])
+```
+
+```{r padj subset log2FC upreg}
+tail(resSig[order(resSig$log2FoldChange),])
+```
+
+## Diagnostic plots
+
+### MA plot
+- overview of exp w/ two-group comparison
+- Shows log2FC from treatment over mean of normalized counts (avg of counts normalized by size factor)
+- Moderated estimates from genes with low counts and highly variable counts
+- Genes w/ adjusted p val below threshold (0.1 default) in color
+```{r MA plot}
+plotMA(res, ylim = c(-1, 1))
+
+# LFC shrinkage
+resultsNames(dds)
+library(apeglm)
+res.ape <- lfcShrink(dds=dds, coef = 2, type = "apeglm")
+plotMA(res.ape, ylim = c(-1, 1))
+```
+
+### Visualizing dispersion
+- strongly expressed genes -> dispersion is squared coefficient of variation
+  - disperion value of 0.01 means gene exp tends to differ by sqrt(0.01) = 10% btwn samples of same treatment group
+- weak genes -> Poisson noise is add'l source of noise, which is added to dispersion
+
+Black pts -> dispersion estimates for each gene, obtailed by considering each gene separately
+- fluctuates strongly around true values
+Red trend line -> fitted, shows dispersions' dependence on mean
+- then shrink each gene's estimate towards red line for final estimates (blue pts) used in hypothesis test
+Blue circles -> genes w/ high gene-wise dispersion estimates labelled as dispersion outliers
+- estimates not shrunk towards fitted trend line
+```{r Dispersion estimates}
+plotDispEsts(dds, ylim = c(1e-6, 1e1))
+```
+
+### Histogram of p values
+```{r pvalue histogram}
+hist(res$pvalue, breaks = 20, col="grey")
+```
+
+## Independent filtering
+
+For weakly expressed genes, no chance of seeing diff exp
+- low read counts = high Poisson noise
+- any biological effect drowned in uncertainties from read counting
+
+Filtering out weakly-expressed genes
+- Test usually finds as non-significant
+- Can still influence multiple testing adjustment
+  - Performance improves if genes removed
+- By removing weakly-exp genes from FDR input, can find more genes significant among those to keep
+  - Improved power of test
+
+DESeq2 auto independent filters to maximize # of genes w/ adj p value less than critical value (default alpha = 0.1)
+- Performed / controlled by `results` function
+
+"Independent" - filter criterion must be independent of actual test statistic
+- Otherwise, test + BH procedure assumptions invalidated
+- Filter on avg over ALL samples
+  - Blind to assignment of samples to trt + ctrl group -> independent
+
+## Adding gene names (biomaRt Ensembl to names)
+```{r Split results rownames}
+res$ensembl <- sapply(strsplit(rownames(res), split="\\+"), "[", 1)
+```
+Use ENSEMBL mart, query with ENSEMBL gene id and request Entrez ID + HCNC symbol
+```{r biomaRting}
+library("biomaRt")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+genemap <- getBM(attributes = c("ensembl_gene_id", "entrezgene_id", "hgnc_symbol"),
+                 filters = "ensembl_gene_id",
+                 values = res$ensembl,
+                 mart = ensembl)
+idx <- match(res$ensembl, genemap$ensembl_gene_id)
+res$entrez <- genemap$entrezgene_id[idx]
+res$hgnc_symbol <- genemap$hgnc_symbol[idx]
+head(res,4)
+```
+
+## Exporting results
+```{r Write to CSV}
+# write.csv(as.data.frame(res), file = "results.csv")
+```
+
+## Working with rlog-transformed data

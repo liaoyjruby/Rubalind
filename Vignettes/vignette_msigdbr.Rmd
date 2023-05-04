@@ -1,0 +1,63 @@
+
+# Introduction to msigdbr
+
+https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+
+```{r Installation}
+install.packages("msigdbr")
+```
+## Usage
+```{r Load package}
+library(msigdbr)
+
+# See all gene sets
+all_gene_sets = msigdbr(species = "Mus musculus")
+head(all_gene_sets)
+
+# See all available species
+msigdbr_species()
+
+# See available collections
+View(msigdbr_collections())
+```
+
+```{r Retrieve specific collection}
+# Get hallmark gene sets
+h_gene_sets = msigdbr(species = "mouse", category = "H")
+View(h_gene_sets)
+# Mouse C2 (curated) CGP (chemical + genetic perturbations) gene sets
+cgp_gene_sets = msigdbr(species = "mouse", category = "C2", subcategory = "CGP")
+head(cgp_gene_sets)
+
+# Manipulate msigdbr() output as dataframe
+all_gene_sets %>%
+  dplyr::filter(gs_cat == "H") %>%
+  head()
+```
+
+```{r Using gene sets data frame for fgsea}
+msigdbr_df <- all_gene_sets %>%
+  dplyr::filter(gs_cat == "H") %>%
+  head()
+
+msigdbr_list = split(x = msigdbr_df$gene_symbol, f = msigdbr_df$gs_name)
+fgsea(pathways = msigdbr_list, ...)
+```
+
+```{r Favour get MsigDB function}
+
+
+get.MSigDB.genesets <- function(msig_df, genesets = c("KEGG", "REACTOME", "H$")){
+	# Default gets KEGG, Reactome, and Hallmarks genesets
+	library(dplyr)
+	reg_exp <- paste(genesets, collapse = "|")
+	gsea_df <- msig_df %>% filter(grepl(reg_exp, gs_subcat) | grepl(reg_exp, gs_cat))
+	## format as list
+	gsea_list <- gsea_df %>% split(x = .$gene_symbol, f = .$gs_name)
+	return(gsea_list)
+}
+```
+
+
+
+

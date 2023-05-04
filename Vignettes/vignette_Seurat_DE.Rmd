@@ -1,0 +1,104 @@
+
+# Seurat: Differential Expression Testing
+
+https://satijalab.org/seurat/articles/de_vignette.html
+
+```{r Load data}
+library(Seurat)
+library(SeuratData)
+pbmc <- LoadData("pbmc3k", type = "pbmc3k.final")
+```
+
+# Default DE tests
+
+`FindMarkers()` - Seurat DE features
+- non-parametric Wilcoxon rank sum test
+- for 2 groups of cells, specify `ident.1` & `ident.2`
+- if `ident.2` non specified or NULL, DE test btwn group and all others
+
+```{r FindMarkers}
+# list options for groups to perform differential expression on
+levels(pbmc)
+# Find differentially expressed features between CD14+ and FCGR3A+ Monocytes
+monocyte.de.markers <- FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono")
+# view results
+head(monocyte.de.markers)
+```
+
+Results data frame columns:
+- `p_val`: unadjusted p value
+- `avg_log2FC`: log fold change of avg expression btwn two groups
+  - positive values = feature more highly expressed in first group
+- `pct.1`: % of cells where feature detected in 1st group
+- `pct.2`: % of cells where feature detected in 2nd group
+- `p_val_adj`: adjusted pval, based on Bonferroni correction using all features in dataset
+
+```{r DE one vs all others}
+# Find differentially expressed features between CD14+ Monocytes and all other cells, only
+# search for positive markers
+monocyte.de.markers <- FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = NULL, only.pos = TRUE)
+# view results
+head(monocyte.de.markers)
+```
+
+# Prefilter features / cells
+
+- increase speed of marker discovery
+- features infrequently detected in either group of cells or features expressed at similar avg levels unlikely to be DE
+- ex. `min.pct`, `logfc.threshold`, `min.diff.pct`, `max.cells.per.ident`
+
+```{r Prefilter min.pct}
+# Pre-filter features that are detected at <50% frequency in either CD14+ Monocytes or FCGR3A+
+# Monocytes
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", min.pct = 0.5))
+```
+
+```{r Prefilter logfc.threshold}
+# Pre-filter features that have less than a two-fold change between the average expression of
+# CD14+ Monocytes vs FCGR3A+ Monocytes
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", logfc.threshold = log(2)))
+```
+
+```{r Prefilter min.diff.pct}
+# Pre-filter features whose detection percentages across the two groups are similar (within
+# 0.25)
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", min.diff.pct = 0.25))
+```
+
+```{r Prefilter max.cells.per.ident (subsampling)}
+# Increasing min.pct, logfc.threshold, and min.diff.pct, will increase the speed of DE
+# testing, but could also miss features that are prefiltered
+
+# Subsample each group to a maximum of 200 cells. Can be very useful for large clusters, or
+# computationally-intensive DE tests
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", max.cells.per.ident = 200))
+```
+
+# DE w/ alternative tests
+
+Supported DE tests
+- wilcox : Wilcoxon rank sum test (default)
+- bimod : Likelihood-ratio test for single cell feature expression, (McDavid et al., Bioinformatics, 2013)
+- roc : Standard AUC classifier
+- t : Student’s t-test
+- poisson : Likelihood ratio test assuming an underlying negative binomial distribution. Use only for UMI-based datasets
+- negbinom : Likelihood ratio test assuming an underlying negative binomial distribution. Use only for UMI-based datasets
+- LR : Uses a logistic regression framework to determine differentially expressed genes. Constructs a logistic regression model predicting group membership based on each feature individually and compares this to a null model with a likelihood ratio test.
+- MAST : GLM-framework that treates cellular detection rate as a covariate (Finak et al, Genome Biology, 2015)
+- DESeq2 : DE based on a model using the negative binomial distribution (Love et al, Genome Biology, 2014)
+
+`test.use` parameter specifies which DE test
+
+```{r MAST DE}
+# Test for DE features using the MAST package
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", test.use = "MAST"))
+```
+
+```{r DESeq2 DE}
+# Test for DE features using the DESeq2 package. Throws an error if DESeq2 has not already been installed
+# Note that the DESeq2 workflows can be computationally intensive for large datasets, but are incompatible with some feature pre-filtering options We therefore suggest initially limiting the number of cells used for testing
+head(FindMarkers(pbmc, ident.1 = "CD14+ Mono", ident.2 = "FCGR3A+ Mono", test.use = "DESeq2", max.cells.per.ident = 50))
+```
+
+
+

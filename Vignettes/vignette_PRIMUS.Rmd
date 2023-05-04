@@ -1,0 +1,54 @@
+
+# PRIMUS: Poisson scRNA Integration of Mixed Unknown Signals
+
+https://htmlpreview.github.io/?https://github.com/KaiyangZ/PRIMUS/blob/master/vignettes/quickstart.html
+
+- splatter package to generate simulated dataset
+- download raw counts + metadata
+
+## splatPop example generation
+```{r splatPop}
+
+vcf <- mockVCF(n.snps = 20000, seed = 42)
+eQTL <- mockBulkeQTL(n.genes = 5000, seed = 42)
+mtx <- mockBulkMatrix(n.genes = 5000, n.sample = 100, seed = 42)
+# gff <- mockGFF(seed = 42)
+counts <- mockSCE(
+  ngenes = 5000,
+  ncells = 1400
+)
+
+params.est <- splatPopEstimate(means = mtx,
+                               eqtl = eQTL,
+                               # counts = counts,
+                               params = params.zhang)
+
+set.seed(42)
+sim <- splatPopSimulate(params = params.est,
+                        vcf = vcf, eqtl = eQTL) 
+sim <- logNormCounts(sim)
+sim <- runPCA(sim, ncomponents = 5)
+plotPCA(sim, colour_by = "Sample")
+plotPCA(sim, colour_by = "Sample")
+
+params.zhang <- newSplatPopParams(
+  group.prob = c(3/14, 4/14, 2/14, 4/14, 1/14),
+  batchCells = c(300, 200, 300, 200, 200, 200)
+)
+
+sim.means <- splatPopSimulateMeans(vcf = vcf, gff = gff,
+                                   params = params)
+
+sim.sc <- splatPopSimulateSC(params=params.est, 
+                             key = sim.means$key,
+                             sim.means=sim.means$means, 
+                             batchCells=c(300, 200, 300, 200, 200, 200), 
+                             sparsify = FALSE)
+
+sim.sc
+
+sim.sc <- logNormCounts(sim.sc)
+sim.sc <- runPCA(sim.sc, ncomponents = 10)
+plotPCA(sim.sc, colour_by = "Sample")
+```
+
