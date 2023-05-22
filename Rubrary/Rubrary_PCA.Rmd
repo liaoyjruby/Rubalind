@@ -44,9 +44,26 @@ Rubrary::plot_PCA(
 debugonce(Rubrary::rotate_varimax)
 PCA_TCGA_VM <- Rubrary::rotate_varimax(PCA_TCGA, normalize = F)
 
+# debugonce(Rubrary::plot_PCA)
 Rubrary::plot_PCA(
-  df_pca = as.data.frame(PCA_TCGA_VM$scores),
+  df_pca = PCA_TCGA_VM$std_scores,
   anno = anno,
+  PCx = "V1", PCy = "V2",
+  type = "Scores",
+  annoname = "sample",
+  annotype = "type",
+  colors = cols,
+  ellipse = T,
+  title = "Varimax"
+)
+
+# Flip x-axis
+scores_flp <- PCA_TCGA_VM$std_scores %>%
+  mutate(V1 = -1 * V1)
+Rubrary::plot_PCA(
+  df_pca = scores_flp,
+  anno = anno,
+  PCx = "V1", PCy = "V2",
   type = "Scores",
   annoname = "sample",
   annotype = "type",
