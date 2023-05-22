@@ -1,0 +1,65 @@
+
+# RRHO in R function
+```{r}
+library(RRHO)
+sig1 <- "/Users/liaoyj/Dropbox/OV/DESeq_PostNACT/OV_UCLA_DESeq_PostNACTvPreNACT_slogp_PC.txt"
+sig2 <- "/Users/liaoyj/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_TreatedvUntreated_slogp.txt"
+
+sig1_name <- "UCLA PostNACT/Pretherapy DESeq"
+sig2_name <- "PDXB2 Treated/Untreated DESeq"
+key = "gene"
+metric1 = "sign_log_p"
+metric2 = "sign_log_p"
+savename = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/PDX_CarboCycling/Batch2/RRHO/PostNACT_Test/RRHO_UCLAPostNACTDESeq_PDXB2TreatmentDESeq"
+
+sig1_high = "PostNACT"
+sig1_low = "Pretherapy"
+
+sig2_high = "Treated"
+sig2_low = "Untreated"
+
+source("~/Documents/Rubrary/R/run_RRHO.R")
+library(ggplot2)
+library(patchwork)
+debugonce(run_RRHO)
+run_RRHO(
+  sig1 = "/Users/liaoyj/Dropbox/OV/DESeq_PostNACT/OV_UCLA_DESeq_PostNACTvPreNACT_slogp_PC.txt",
+  sig2 = "/Users/liaoyj/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_TreatedvUntreated_slogp.txt",
+  sig1_name = "UCLA PostNACT/Pretherapy DESeq",
+  sig2_name = "PDXB2 Treated/Untreated DESeq",
+  key = "gene",
+  metric1 = "sign_log_p",
+  metric2 = "sign_log_p",
+  savename = "/Users/liaoyj/Library/CloudStorage/Dropbox/Rubrary/run_RRHO/RRHO_UCLAPostNACTDESeq_PDXB2TreatmentDESeq",
+  sig1_high = "PostNACT",
+  sig1_low = "Pretherapy",
+  sig2_high = "Treated",
+  sig2_low = "Untreated",
+  webtool = T,
+  hm_method = "ggplot"
+)
+
+```
+
+```{r PDXB2 RRHO DEseq TvU R2vPT}
+source("~/Documents/Rubrary/R/run_RRHO.R")
+library(ggplot2)
+library(patchwork)
+run_RRHO(
+  sig1 = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_R2vPT_slogp.txt",
+  sig2 = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_TreatedvUntreated_slogp.txt",
+  sig1_name = "PDXB2 R2vPT DESeq",
+  sig2_name = "PDXB2 Treated/Untreated DESeq",
+  key = "gene",
+  metric1 = "sign_log_p",
+  metric2 = "sign_log_p",
+  savename = "/Users/liaoyj/Library/CloudStorage/Dropbox/Rubrary/run_RRHO/RRHO_PDXB2R2vPT_PDXB2TvUDESeq",
+  sig1_high = "2nd Recurrence",
+  sig1_low = "Pre-therapy",
+  sig2_high = "Treated",
+  sig2_low = "Untreated",
+  webtool = T, steps = 100, scatter = T,
+  hm_method = "ggplot"
+)
+```
+

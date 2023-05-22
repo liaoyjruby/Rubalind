@@ -1,0 +1,16 @@
+
+# Quartile norm + log2
+
+
+```{r Load ex data - PDXB2}
+PDXB2_cts <- read.delim("/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/PDX_CarboCycling/Batch2/OV_PDXB2_CarboCyc_rsem_genes_raw_counts.txt", row.names = 1)
+
+PDXB2_UQ <- read.delim("/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/PDX_CarboCycling/Batch2/toil_output/OV_PDX_CarboCyc_rsem_genes_upper_norm_counts.txt", row.names = 1)
+
+PDXB2_log2UQ <- read.delim("/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/PDX_CarboCycling/Batch2/OV_PDXB2_CarboCyc_rsem_genes_upper_norm_counts_coding_log2.txt")
+```
+
+```{r}
+
+```
+

@@ -1,0 +1,28 @@
+
+# Vignette: kBET user's guide
+
+https://github.com/theislab/kBET/blob/master/vignettes/kBET_vignette.html
+
+```{r Prepare dataset}
+library(RCurl)
+
+data_path <- "https://raw.githubusercontent.com/jdblischak/singleCellSeq/master/data/"
+umi <- read.table(text=getURL(paste0(data_path, "molecules.txt")))
+anno <- read.table(text=getURL(paste0(data_path,"annotation.txt")), sep = "\t", header = TRUE)
+
+# Input list of quality single cells
+quality_single_cells <- scan(text=getURL(paste0(data_path,"quality-single-cells.txt")), 
+                             what = "character")
+
+# Filter out cells with insufficient quality
+umi.qc <- umi[, colnames(umi) %in% quality_single_cells]
+anno.qc <- anno[anno$sample_id %in% quality_single_cells, ]
+
+# Remove genes with zero read counts in the single cells
+umi.qc <- umi.qc[rowSums(umi.qc) > 0, ]
+dim(umi.qc)
+
+# Vector of ERCC spike-in genes IDs
+spikes <- grep('ERCC', rownames(umi.qc))
+```
+

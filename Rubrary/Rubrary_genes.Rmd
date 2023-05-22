@@ -1,0 +1,133 @@
+
+# Functional Annotation w/ biomartr
+https://cran.r-project.org/web/packages/biomartr/vignettes/Functional_Annotation.html
+
+```{r Start}
+options(timeout = 30000)
+library(biomaRt)
+
+# look at top 10 databases      
+head(biomaRt::listMarts(host = "https://www.ensembl.org"), 10)      
+```
+
+```{r See marts and attributes}
+# List marts for many different organisms
+head(biomaRt::listDatasets(biomaRt::useMart("ENSEMBL_MART_ENSEMBL", host = "https://www.ensembl.org")), 10)
+
+# Attributes / anno data for `Homo sapiens` genes
+biomaRt::listAttributes(
+  biomaRt::useDataset(
+    dataset = "hsapiens_gene_ensembl",
+    mart = useMart("ENSEMBL_MART_ENSEMBL")))
+
+# Retrieve all filters that can be used by BioMart query
+biomaRt::listFilters(
+  biomaRt::useDataset(
+    dataset = "hsapiens_gene_ensembl",
+    mart = useMart("ENSEMBL_MART_ENSEMBL",
+                   host = "https://www.ensembl.org")))
+```
+
+```{r do BioMart query}
+ # 1) select a mart and data set        
+ mart <- biomaRt::useDataset(dataset = "hsapiens_gene_ensembl",
+                    mart    = useMart("ENSEMBL_MART_ENSEMBL",
+                    host    = "https://www.ensembl.org"))
+        
+ # 2) run a biomart query using the getBM() function        
+ # and specify the attributes and filter arguments      
+ geneSet <- "GUCA2A" 
+ geneSet <- Dong_mrkrs$NE
+ geneSet <- pthwys[grepl("GOBP_HISTONE_H3_K9", names(pthwys))]$GOBP_HISTONE_H3_K9_TRIMETHYLATION
+        
+ resultTable <- biomaRt::getBM(
+   attributes = c("hgnc_symbol", "entrezgene_id", 
+                  "description", "phenotype_description"),
+ filters  = "hgnc_symbol",
+ values = geneSet,
+ mart = mart)
+ 
+ resultTable$description <- sub("\\[Source:.*", "", resultTable$description)
+        
+ View(resultTable)
+```
+
+```{r function?}
+get_PC_genes <- function(){
+  Rubrary::use_pkg("biomaRt")
+  # Select Homo sapiens mart
+  mart <- biomaRt::useDataset(dataset = "hsapiens_gene_ensembl",
+                              mart = useMart("ENSEMBL_MART_ENSEMBL"))
+  PC_genes <- biomaRt::getBM(attributes = c("hgnc_symbol", "gene_biotype"),
+                          filters = "biotype",
+                          values = "protein_coding",
+                          mart = mart) %>%
+    filter(hgnc_symbol != "") %>%
+    rename(gene = hgnc_symbol) %>%
+    dplyr::select(gene)
+  
+  return(PC_genes$gene)
+}
+
+coding_file <- "/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/log2_coding_expression_datasets/protein-coding_gene.txt"
+
+# Genes in df must be in rownames
+filter_PC_genes <- function(df, PC_genes = get_PC_genes(),
+                            search = FALSE){
+  nomatch <- rownames(df)[!(rownames(df) %in% PC_genes)]
+  warning(paste0("Genes not found in PC gene list: \n",
+                 paste(nomatch, collapse = ", ")),
+          call. = FALSE, immediate. = TRUE)
+  
+  # Seurat symbol update if desired
+  if ((search == FALSE) && (length(nomatch) > 0)){
+    if (utils::menu(c("Yes", "No"),
+      title = "\nSearch gene symbols?") == "1") {
+      search = TRUE
+    }
+  }
+  if(search){
+    Rubrary::use_pkg("Seurat", strict = TRUE)
+    updated <- Seurat::UpdateSymbolList(symbols = nomatch)
+    names(updated) <- nomatch
+    for(g in names(updated)){
+      PC_genes[PC_genes == updated[g]] <- g
+    }
+  }
+  
+  # Filter
+  df_pc <- df[rownames(df) %in% PC_genes,,drop = F]
+  return(df_pc)
+}
+
+sig_SCN[!(sig_SCN$Gene %in% PCgenes$gene),]
+
+Seurat::UpdateSymbolList(sig_SCN[!(sig_SCN$Gene %in% PCgenes$gene),"Gene"])
+
+get_gene_desc <- function(genes,
+                          attrs = c("hgnc_symbol", "description"), 
+                          clean_desc = TRUE, verbose = FALSE){
+  Rubrary::use_pkg("biomaRt")
+  # Select Homo sapiens mart
+  mart <- biomaRt::useDataset(dataset = "hsapiens_gene_ensembl",
+                    mart = biomaRt::useMart(
+                      "ENSEMBL_MART_ENSEMBL", verbose = verbose),
+                    verbose = verbose)
+  
+  # Run biomaRt query
+  tbl <- biomaRt::getBM(
+    attributes = attrs,
+    filters  = "hgnc_symbol",
+    values = genes,
+    mart = mart,
+    verbose = verbose)
+  
+  if(clean_desc){
+      tbl$description <- sub("\\[Source:.*", "", tbl$description)
+  }
+  return(tbl)
+}
+```
+
+
+

@@ -1,0 +1,215 @@
+
+```{r reference}
+source("/Users/liaoyj/Dropbox/Ovarian Project/functions/PCA_from_file_and_predict_second_dataset_scn.R")
+source("/Users/liaoyj/Dropbox/Ovarian Project/functions/PCA_from_df_and_predict_second_dataset_scn.R")
+
+# Rubrary fx
+
+```
+
+# run_PCA
+- varimax
+```{r}
+beltran_log2UQ <- data.frame(
+  data.table::fread("https://raw.githubusercontent.com/graeberlab-ucla/glab.library/master/vignettes/PCA_tutorial/Beltran_2016_rsem_genes_upper_norm_counts_coding_log2.txt"),
+  row.names = 1)
+
+anno <- data.frame(data.table::fread("https://raw.githubusercontent.com/graeberlab-ucla/glab.library/master/vignettes/PCA_tutorial/human.info.rsem.expression.txt"))
+
+
+```
+
+# biplot
+```{r}
+data(iris)
+iris$Sample = rownames(iris)
+df_pca <- Rubrary::run_PCA(t(iris[,c(1:4)]), center = TRUE, scale = FALSE)
+# Scores
+Rubrary::plot_PCA(df_pca = PCA_iris,
+ anno = iris[,c("Sample", "Species")],
+ annoname = "Sample", annotype = "Species",
+ title = "Iris PCA Scores by Species")
+# Loadings
+Rubrary::plot_PCA(df_pca = PCA_iris,
+ type = "Loadings", title = "Iris PCA Loadings", label = TRUE)
+
+obj_prcomp <- Rubrary::run_PCA(t(iris[,c(1:4)]), center = TRUE, scale = F)
+anno = iris[,c("Sample", "Species")]
+annoname = "Sample"; annotype = "Species"
+label = "None"
+
+#' Plot "proper" PCA biplot
+#' 
+#' For PCA SVD $X = USV^T$, uses standardized principal components for data points ($\bf{U}\sqrt{n - 1}$) and loadings ($\bf{VS}/\sqrt{n-1}$) and plots onto the same scale.
+#'
+#' @param obj_prcomp `prcomp` object
+#' @param anno df; Annotation info for observations
+#' @param annoname string; Colname in `anno` matching data points
+#' @param annotype string; Colname in `anno` for desired coloring
+#' @param label c("Both", "Loadings", "Scores", "None"); what points to label
+#' @param colors char vector; Length should be number of unique `annotype`s
+#' @param col_load string; Color for loading arrow segments
+#' @param title string; Plot title
+#' @param ellipse logical; Draw `ggplot2::stat_ellipse` data ellipse w/ default params
+#' @param savename string; File path to save plot under
+#' @param height numeric; Saved plot height
+#' @param width numeric; Saved plot width
+#'
+#' @return Biplot as `ggplot` object
+#' @export
+#'
+#' @examples
+#' iris$Sample = rownames(iris)
+#' PCA_iris <- Rubrary::run_PCA(t(iris[,c(1:4)]), center = TRUE, scale = FALSE)
+#' Rubrary::plot_PCA_biplot(obj_prcomp = PCA_iris, anno = iris[,c("Sample", "Species")], annoname = "Sample", annotype = "Species", label = "Loadings", ellipse = TRUE, title = "Iris PCA Biplot")
+plot_PCA_biplot <- function(obj_prcomp, anno = NULL, annoname = "Sample", annotype = "Batch",
+                            label = c("Both", "Loadings", "Scores", "None"),
+                            colors = NULL, col_load = "firebrick", title = NULL,
+                            ellipse = FALSE, savename = NULL, height = 8, width = 8){
+  label = match.arg(label)
+  
+  df_sc <- obj_prcomp$x %>%
+    as.data.frame() %>%
+    mutate(across(everything(), ~./sd(.))) %>% # Standardized PC scores, div by std dev for unit variance
+    tibble::rownames_to_column(var = "Scores")
+  
+  if(!is.null(anno)){
+    df_sc <- df_sc %>%
+      left_join(., anno, by = setNames(nm = "Scores", annoname))
+  }
+  
+  df_lo <- Rubrary::get_loadings(obj_prcomp) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "Loadings")
+  
+  sdev <- obj_prcomp$sdev %>%
+      as.data.frame() %>%
+      mutate(var = .^2,
+             pve = round(var / sum(var) * 100, digits = 2)) %>%
+      `rownames<-`(paste0("PC", rownames(.)))
+  
+  # Variance explained
+  PCxlab <- paste0(PCx, " (", sdev$pve[match(PCx, rownames(sdev))], "%)")
+  PCylab <- paste0(PCy, " (", sdev$pve[match(PCy, rownames(sdev))], "%)")
+  
+  # Manage colors
+  if(is.null(colors) && !is.numeric(df_merged[, annotype])){
+    Rubrary::use_pkg("scales")
+    cols = scales::hue_pal()(length(unique(df_merged[, annotype])))
+  } else if (!is.null(colors) && colors == "alpha"){
+    Rubrary::use_pkg("pals")
+    cols = unname(pals::alphabet2(n = length(unique(df_merged[, annotype]))))
+  } else {
+    cols = colors
+  }
+  
+  plt <- ggplot(df_sc, aes(x = .data[[PCx]], y = .data[[PCy]])) + # Scores df input
+    # X/Y axes
+    geom_vline(xintercept = 0, linetype = "dotted", alpha = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dotted", alpha = 0.5) +
+    # Loadings
+    geom_segment(
+      data = df_lo, mapping = aes(x = 0, y = 0, xend = .data[[PCx]], yend = .data[[PCy]]),
+      arrow = arrow(length = unit(0.025, "npc")), color = col_load) +
+    # Scores
+    {if (is.null(anno)) geom_point()} +
+    {if (!is.null(anno)) geom_point(
+      data = df_sc,
+      mapping = aes(color = .data[[annotype]])
+    )} +
+    # Scores ellipse
+    {if (ellipse) stat_ellipse(
+      data = df_sc, aes(color = .data[[annotype]]))} +
+    # Labels
+    labs(title = title,
+       x = PCxlab,
+       y = PCylab) +
+    {if (label != "Loadings" && label != "None")
+      ggrepel::geom_text_repel(label = df_sc[, "Scores"], max.overlaps = Inf)} + # Scores
+    {if (label != "Scores" && label != "None")
+      ggrepel::geom_label_repel( # Loadings
+      data = df_lo,
+      label = df_lo[, "Loadings"], max.overlaps = Inf)} + # Loadings only
+    theme_classic()
+  
+    if (!is.null(savename)) {
+      ggsave(
+        plot = plt,
+        filename = savename,
+        height = height,
+        width = width
+      )
+    }
+  
+  return(plt)
+}
+```
+
+
+# project_PCA
+```{r test project_PCA}
+center = TRUE; scale = FALSE; tol = NULL
+varimax = TRUE; rotate = TRUE
+
+
+ref <- "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/PRAD.norm_Beltran_LUAD.norm_SCLC_LUAD.subset_rsem_genes_upper_norm_counts_coding_log2.txt"
+
+query <- read.delim(
+  file = "/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/PDX_CarboCycling/Batch2/OV_PDXB2_CarboCyc_rsem_genes_upper_norm_counts_coding_log2.txt",
+  row.names = 1
+)
+
+prcomp_obj <- Rubrary::run_PCA(
+  df = ref,
+  center = center,
+  scale = scale,
+  tol = tol,
+  screeplot = FALSE
+)
+
+rotation <- prcomp_obj$rotation
+
+scale(query, prcomp_obj$center, prcomp_obj$scale) %*% prcomp_obj$rotation 
+
+```
+
+
+# Batch 2 PDX projection example
+
+```{r SCN score PCA projection from ov.bulk.seq}
+source("/Users/liaoyj/Dropbox/Ovarian Project/functions/PCA_from_file_and_predict_second_dataset_scn.R")
+Balanis_log2 <- "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/PRAD.norm_Beltran_LUAD.norm_SCLC_LUAD.subset_rsem_genes_upper_norm_counts_coding_log2.txt"
+
+human.info = read.delim(
+  file = "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/human.info.rsem.expression.txt",
+  stringsAsFactors = F
+)
+
+PDX_log2 <- "/Users/liaoyj/Dropbox/Ovarian Project/PDX_CarboCycling/OV_PDX_CarboCyc_rsem_genes_upper_norm_counts_coding_log2.txt"
+PDX <- read.table(PDX_log2, header = T)
+
+ov.anno = read.delim(
+  file = "/Users/liaoyj/Dropbox/Ovarian Project/UCLA cohort information/UCLAOvarian_CombinedBatches_Annotation_v9.txt",
+  stringsAsFactors = F
+)
+
+pdx.anno <- openxlsx::read.xlsx(
+  xlsxFile = "/Users/liaoyj/Dropbox/OV/PDX_CarboCyc_RNASeq/OV_PDX_CarboCyc.xlsx"
+)
+library(ggplot2)
+#SCN Score: PCA_from_file_and_predict_second_dataset_scn----
+PCA_from_file_and_predict_second_dataset_scn(
+  file = Balanis_log2, 
+  file2 = PDX_log2,
+  sample.names = human.info$sample, 
+  sample.type = human.info$type,
+  sample.names2 = pdx.anno$ID, 
+  sample.type2 = pdx.anno$Stage,
+  train_string = "SCN", 
+  test_string = "PDX",
+  train_gray = T,
+  labels.pred = T,
+  output_folder = "/Users/liaoyj/Dropbox/OV/PDX_CarboCyc_RNASeq/SCN_Projection/",
+  # grey.col.pal = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#999999")
+)
+```

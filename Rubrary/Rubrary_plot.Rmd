@@ -1,0 +1,23 @@
+
+# Plot scatter heatmap
+
+```{r}
+?Rubrary::run_RRHO
+
+Rubrary::run_RRHO(
+  sig1 = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_R2vPT_slogp.txt",
+  sig2 = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/PDX_CarboCycling/Batch2/DESeq/PDXB2_DESeq_TreatedvUntreated_slogp.txt",
+  sig1_name = "PDXB2 R2vPT DESeq",
+  sig2_name = "PDXB2 Treated/Untreated DESeq",
+  key = "gene",
+  metric1 = "sign_log_p",
+  metric2 = "sign_log_p",
+  # savename = "/Users/liaoyj/Library/CloudStorage/Dropbox/Rubrary/run_RRHO/RRHO_PDXB2R2vPT_PDXB2TvUDESeq",
+  sig1_high = "2nd Recurrence",
+  sig1_low = "Pre-therapy",
+  sig2_high = "Treated",
+  sig2_low = "Untreated",
+  webtool = F, steps = 100, scatter = T
+)
+```
+
