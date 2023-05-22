@@ -7,6 +7,56 @@ source("/Users/liaoyj/Dropbox/Ovarian Project/functions/PCA_from_df_and_predict_
 
 ```
 
+# Recreate Balanis Fig1A
+
+```{r load data}
+library(dplyr)
+
+SCN_TCGA_log2UQ <- data.frame(data.table::fread("/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/PRAD.norm_Beltran_LUAD.norm_SCLC_LUAD.subset_rsem_genes_upper_norm_counts_coding_log2.txt"),
+  row.names = 1)
+
+# Subset to relevant types
+anno <- data.frame(data.table::fread("/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/human.info.rsem.expression.txt")) %>%
+  filter(sample %in% names(SCN_TCGA_log2UQ)) %>%
+  mutate(type = factor(type,
+                       levels = c("PRAD.norm", "CRPC", "NEPC",
+                                  "LUAD.norm", "LUAD", "SCLC")))
+
+PCA_TCGA <- Rubrary::run_PCA(
+  df = SCN_TCGA_log2UQ,
+  center = T, scale = F
+)
+
+cols <- c("pink", "red", "darkred",
+          "lightskyblue", "blue", "navy")
+
+# debugonce(Rubrary::plot_PCA)
+Rubrary::plot_PCA(
+  df_pca = PCA_TCGA,
+  anno = anno,
+  type = "Scores",
+  annoname = "sample",
+  annotype = "type",
+  colors = cols,
+  ellipse = T
+)
+
+debugonce(Rubrary::rotate_varimax)
+PCA_TCGA_VM <- Rubrary::rotate_varimax(PCA_TCGA, normalize = F)
+
+Rubrary::plot_PCA(
+  df_pca = as.data.frame(PCA_TCGA_VM$scores),
+  anno = anno,
+  type = "Scores",
+  annoname = "sample",
+  annotype = "type",
+  colors = cols,
+  ellipse = T,
+  title = "Varimax"
+)
+```
+
+
 # run_PCA
 - varimax
 ```{r}
@@ -15,7 +65,6 @@ beltran_log2UQ <- data.frame(
   row.names = 1)
 
 anno <- data.frame(data.table::fread("https://raw.githubusercontent.com/graeberlab-ucla/glab.library/master/vignettes/PCA_tutorial/human.info.rsem.expression.txt"))
-
 
 ```
 

@@ -1,6 +1,6 @@
 
 setup <- function(ID, sample = NA){
-  setwd("~/Documents/Rosalind/")
+  setwd("~/Documents/Rubalind/")
   dir.create(paste0("./", ID))
   file.copy("template.R", paste0("./", ID))
   file.rename(paste0("./", ID, "/template.R"), paste0("./", ID, "/", ID, ".R"))
