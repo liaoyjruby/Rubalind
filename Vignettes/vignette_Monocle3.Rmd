@@ -9,7 +9,104 @@ BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
                        'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
                        'SummarizedExperiment', 'batchelor', 'HDF5Array',
                        'terra', 'ggrastr'))
-# devtools::install_github('cole-trapnell-lab/monocle3')
+devtools::install_github('cole-trapnell-lab/monocle3')
 library(monocle3)
 ```
+
+# Getting started w/ Monocle 3
+https://cole-trapnell-lab.github.io/monocle3/docs/getting_started/
+
+## Get started
+
+```{r Load Monocle3}
+library(monocle3)
+
+# The tutorial shown below and on subsequent pages uses two additional packages:
+library(ggplot2)
+library(dplyr)
+```
+
+Input: cell by gene expression matrix
+- absolute transcript counts (from UMI experiments)
+- works "out-of-the-box" w/ transcript count matrices produced by Cell Ranger
+
+## `cell_data_set` class
+- derived from Bioconductor `SingleCellExperiment` class
+- three input files
+  - `expression_matrix`: numeric mtx of expression values, rows are genes, columns are cells
+    - ncol(exp_mtx) == nrow(cell_metadata)
+    - nrow(exp_mtx) == nrow(gene_metadata)
+    - colnames(exp_mtx) == rownames(cell_metadata)
+    - rownames(exp_mtx) == rownames(gene_metadata)
+  - `cell_metadata`: dataframe, rows are cells, columns are cell attributes (cell type, culture condition, day captured)
+  - `gene_metadata`: dataframe, rows are features (genes), columns are gene attributes (biotype, gc content, etc.)
+    - "gene_short_name_ column, which represents gene symbol or simple name (generally used for plotting) for each gene
+
+```{r Generate cell_data_set}
+# Load the data
+expression_matrix <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_expression.rds"))
+cell_metadata <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_colData.rds"))
+gene_annotation <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_rowData.rds"))
+
+
+# Make the CDS object
+cds <- new_cell_data_set(expression_matrix,
+                         cell_metadata = cell_metadata,
+                         gene_metadata = gene_annotation)
+```
+
+`umi_cutoff` set to 100 by default!
+```{r Generate cell_data_set from 10X output, eval=FALSE}
+# Provide the path to the Cell Ranger output.
+cds <- load_cellranger_data("~/Downloads/10x_data")
+# MatrixMarket format
+cds <- load_mm_data(mat_path = "~/Downloads/matrix.mtx", 
+                    feature_anno_path = "~/Downloads/features.tsv", 
+                    cell_anno_path = "~/Downloads/barcodes.tsv")
+```
+
+```{r Sparse matrix for cell_data_set, eval=FALSE}
+cds <- new_cell_data_set(as(umi_matrix, "sparseMatrix"),
+                         cell_metadata = cell_metadata,
+                         gene_metadata = gene_metadata)
+```
+
+```{r Combine CDS objects, eval=FALSE}
+# make a fake second cds object for demonstration
+cds2 <- cds[1:100,]
+
+big_cds <- combine_cds(list(cds, cds2))
+```
+
+# Clustering & classifying your cells
+
+Cao & Packer et al. C. elegans data
+```{r Load data}
+library(monocle3)
+library(dplyr) # imported for some downstream data manipulation
+
+expression_matrix <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_expression.rds"))
+cell_metadata <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_colData.rds"))
+gene_annotation <- readRDS(url("https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/cao_l2_rowData.rds"))
+
+cds <- new_cell_data_set(expression_matrix,
+                         cell_metadata = cell_metadata,
+                         gene_metadata = gene_annotation)
+```
+
+```{r Pre-process data}
+# PCA is standard for RNA-seq
+cds <- preprocess_cds(cds, num_dim = 100)
+cds
+plot_pc_variance_explained(cds)
+```
+
+```{r Reduce dimensionality & visualize cells}
+# UMAP by default - faster + better suited for RNA-seq clustering + trajectory analysis
+cds <- reduce_dimension(cds)
+plot_cells(cds)
+```
+
+
+
 
