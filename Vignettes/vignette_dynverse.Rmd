@@ -1,0 +1,186 @@
+
+# Dynverse
+
+```{r Install dynverse}
+# devtools::install_github("dynverse/dyno")
+install.packages("hdf5r")
+# Docker required - test installation
+# Run Docker app first to get the daemon running
+dynwrap::test_docker_installation(detailed = TRUE)
+```
+
+## Quickstart
+
+https://dynverse.org/users/2-quick_start/
+
+```{r Load libraries}
+library(dyno)
+library(tidyverse)
+```
+
+User guide: preparing the data
+https://dynverse.org/users/3-user-guide/1-preparing/
+
+```{r Prepare data}
+data("fibroblast_reprogramming_treutlein")
+
+# Sparse matrices
+class(fibroblast_reprogramming_treutlein$counts)
+class(fibroblast_reprogramming_treutlein$expression)
+
+dataset <- wrap_expression(
+  counts = fibroblast_reprogramming_treutlein$counts,
+  expression = fibroblast_reprogramming_treutlein$expression
+)
+```
+
+Uses benchmarking results from dynbenchmark paper.
+```{r Select best methods for dataset}
+# guidelines <- guidelines_shiny(dataset)
+# Reproduces the guidelines as created in the shiny app
+answers <- dynguidelines::answer_questions(
+  multiple_disconnected = NULL, 
+  expect_topology = NULL, 
+  expected_topology = NULL, 
+  n_cells = 392, 
+  n_features = 2000, 
+  memory = "2GB", 
+  prior_information = c("start_id", "end_id", "end_n", "start_n", "leaves_n", "groups_n", "features_id", "dimred"), 
+  docker = TRUE
+)
+guidelines <- dynguidelines::guidelines(answers = answers)
+methods_selected <- guidelines$methods_selected
+methods_selected <- c("slingshot", "paga_tree", "grandprix", "paga")
+```
+
+```{r Running methods}
+model <- infer_trajectory(dataset, first(methods_selected))
+```
+
+Several visualization methods to biologically interpret trajectories
+
+ex. combine dimensionality reduction, trajectory model ,and cell clustering
+```{r Plotting trajectory}
+model <- model %>% add_dimred(dyndimred::dimred_mds, expression_source = dataset$expression)
+plot_dimred(
+  model, 
+  expression_source = dataset$expression, 
+  grouping = fibroblast_reprogramming_treutlein$grouping
+)
+```
+
+```{r Plot gene expression}
+plot_dimred(
+  model, 
+  expression_source = dataset$expression,
+  feature_oi = "Fn1"
+)
+```
+
+```{r Plot groups with background color, fig.width=15, fig.height=10}
+plot_dimred(
+  model, 
+  expression_source = dataset$expression, 
+  color_cells = "feature",
+  feature_oi = "Vim",
+  color_density = "grouping",
+  grouping = fibroblast_reprogramming_treutlein$grouping,
+  label_milestones = FALSE
+)
+```
+
+### Interpret trajectory biologically
+
+User guide: adapting the trajectory
+https://dynverse.org/users/3-user-guide/5-adapting/
+
+- can use knowledge of start, end, intermediate steps present in data
+- use to adapt trajectory so it's easier to interpret
+
+```{r Rooting tree}
+model <- model %>% 
+  add_root_using_expression(c("Vim"), dataset$expression)
+```
+
+- can label milestones w/ marker genes
+- then use labels for subsequent analyses + visualization
+```{r Milestone labelling}
+model <- label_milestones_markers(
+  model,
+  markers = list(
+    MEF = c("Vim"),
+    Myocyte = c("Myl1"),
+    Neuron = c("Stmn3")
+  ),
+  dataset$expression
+)
+```
+
+### Predicting + visualizing genes of interest
+
+```{r Global overview, fig.width=15, fig.height=10}
+plot_heatmap(
+  model,
+  expression_source = dataset$expression,
+  grouping = fibroblast_reprogramming_treutlein$grouping,
+  features_oi = 50
+)
+```
+
+```{r Lineage / branch markers, fig.width=15, fig.height=10}
+# We can also extract features specific for a branch, eg. genes which change when a cell differentiates into a Neuron
+
+branch_feature_importance <- calculate_branch_feature_importance(
+  model,
+  expression_source=dataset$expression)
+
+neuron_features <- branch_feature_importance %>% 
+  filter(to == names(model$milestone_labelling)[which(model$milestone_labelling =="Neuron")]) %>% 
+  top_n(50, importance) %>% 
+  pull(feature_id)
+
+plot_heatmap(
+  model, 
+  expression_source = dataset$expression, 
+  features_oi = neuron_features
+)
+```
+
+```{r Genes important at bifurcation points, fig.width=15, fig.height=10}
+branching_milestone <- model$milestone_network %>%
+  group_by(from) %>%
+  filter(n() > 1) %>%
+  pull(from) %>%
+  first()
+
+branch_feature_importance <- calculate_branching_point_feature_importance(
+  model,
+  expression_source = dataset$expression,
+  milestones_oi = branching_milestone)
+
+branching_point_features <- branch_feature_importance %>%
+  top_n(20, importance) %>%
+  pull(feature_id)
+
+plot_heatmap(
+  model,
+  expression_source = dataset$expression,
+  features_oi = branching_point_features
+)
+```
+
+```{r Milestone genes visualization, fig.width=15, fig.height=12}
+space <- dyndimred::dimred_mds(dataset$expression)
+
+map(branching_point_features[1:12], function(feature_oi) {
+  plot_dimred(
+    model,
+    dimred = space,
+    expression_source = dataset$expression,
+    feature_oi = feature_oi,
+    label_milestones = FALSE) +
+    theme(legend.position = "none") +
+    ggtitle(feature_oi)
+}) %>% patchwork::wrap_plots()
+```
+
