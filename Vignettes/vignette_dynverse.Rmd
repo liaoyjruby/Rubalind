@@ -24,8 +24,9 @@ https://dynverse.org/users/3-user-guide/1-preparing/
 ```{r Prepare data}
 data("fibroblast_reprogramming_treutlein")
 
-# Sparse matrices
+# Sparse matrices - rows as cells, columns as features/genes
 class(fibroblast_reprogramming_treutlein$counts)
+head(fibroblast_reprogramming_treutlein$counts)
 class(fibroblast_reprogramming_treutlein$expression)
 
 dataset <- wrap_expression(
