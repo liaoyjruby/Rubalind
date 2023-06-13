@@ -254,7 +254,7 @@ heatmap(log1p(heatdata), Colv = NA,
 `getLineages` function
 - input: `n` x `p` mtx, vector of clustering results of length `n`
 - map connection btwn adjacent clusters w/ minimum spanning tree (MST)
-- ID path through connections taht represent lineages
+- ID path through connections that represent lineages
 - output: `PseudotimeOrdering` object w/ inputs as well as inferred MST (`igraph` obj) + lineages (ordered vectors of cluster names)
 
 unsupervised / semi-supervised analysis
@@ -265,7 +265,7 @@ unsupervised / semi-supervised analysis
 
 ex. simulated data: Cluster 1 selected as start cluster
 - generally recommend specify initial cluster based on prior knowledge
-- no effect on MST construction, but impact on how branching cruves are constructed
+- no effect on MST construction, but impact on how branching curves are constructed
 
 ```{r getLineages}
 lin1 <- getLineages(rd, cl, start.clus = '1')
