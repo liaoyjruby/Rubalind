@@ -1,5 +1,43 @@
 library(dplyr)
 library(ggplot2)
+setwd("~/Documents/Rubrary")
+
+# Flip test ----
+Balanis_log2 <- "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/PRAD.norm_Beltran_LUAD.norm_SCLC_LUAD.subset_rsem_genes_upper_norm_counts_coding_log2.txt"
+human.info = Rubrary::rread("/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/human.info.rsem.expression.txt")
+
+OVB5_log2 <- "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/Batch5/OV_Batch5_rsem_genes_upper_norm_coding_log2.txt"
+OVB5_anno <- Rubrary::rread("/Users/liaoyj/Library/CloudStorage/Dropbox/OV/Batch5/UCLAOvarian_Batch5_Annotation.txt")
+OVB5_anno <- OVB5_anno %>% filter(Batch == "5")
+
+train = Balanis_log2;
+test = OVB5_log2;
+scale = F; varimax = T;
+train_name = "SCN"; train_anno = human.info; train_colors = NULL
+train_annoname = "sample"; train_annotype = "type";
+test_name = "OVB5"; test_anno = OVB5_anno;
+test_annoname = "Sample_ID"; test_annotype = "Cohort_Specific";
+test_colors = scales::hue_pal()(3);
+label = c(F, T); flip = c(T, F); ellipse = F;
+savedir = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/Batch5/Rubrary/";
+test_only_plt = T; rank = 3
+height = 8; width = 8; fmt = "png"
+
+debugonce(predict_PCA)
+predict_PCA(
+  train = Balanis_log2,
+  test = OVB5_log2,
+  scale = F, varimax = T,
+  train_name = "SCN", train_anno = human.info,
+  train_annoname = "sample", train_annotype = "type",
+  test_name = "OVB5", test_anno = OVB5_anno,
+  test_annoname = "Sample_ID", test_annotype = "Cohort_Specific",
+  test_colors = scales::hue_pal()(3),
+  label = c(F, T), flip = c(T, F),
+  savedir = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/Batch5/Rubrary/",
+  test_only_plt = T
+)
+
 # Test input (maximal) ----
 train <- "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/PRAD.norm_Beltran_LUAD.norm_SCLC_LUAD.subset_rsem_genes_upper_norm_counts_coding_log2.txt"
 test <- "/Users/liaoyj/Dropbox/OV/DepMap/DepMap22Q4_log2UQ_OV.txt"
@@ -42,7 +80,7 @@ rread <- function(file, row.names = 0){
   Rubrary::use_pkg("data.table")
   df <- data.table::fread(file)
   if(row.names != 0){
-    rn_name <- 
+    rn_name <-
       df <- df %>%
       tibble::column_to_rownames(var = names(.)[row.names])
   }
@@ -122,8 +160,8 @@ plt <- project_PCA(
 plt + scale_x_reverse()
 
 #' Project query/test samples onto PCA of reference/train samples
-#' 
-#' Plot titles are automatically constructed based on parameters. Adding a `savedir` argument will result in intermediate plots and final projected scores to be output. 
+#'
+#' Plot titles are automatically constructed based on parameters. Adding a `savedir` argument will result in intermediate plots and final projected scores to be output.
 #'
 #' @import dplyr
 #' @import ggplot2
@@ -186,7 +224,7 @@ project_PCA <- function(
   PCx = "PC1"; PCy = "PC2" # Set as function arg?
   # Expand args to L2 if applicable
   if(length(ellipse) == 1){ ellipse = c(ellipse, ellipse)}
-  ellipse_train <- ellipse[1] 
+  ellipse_train <- ellipse[1]
   if(length(label) == 1){ label = c(label, label)}
   # Manage dataframes
   if(is(train, "data.frame") || is(train, "matrix")){ train_df <- train } else { train_df <- Rubrary::rread(train, row.names = 1)}
@@ -213,7 +251,7 @@ project_PCA <- function(
   test_df <- test_df[common_feats,]
   # Run train PCA
   train_pca <- Rubrary::run_PCA(df = train_df, center = T, scale = scale, screeplot = F)
-  
+
   # Train annotation provided
   if(!is.null(train_anno)){
     if(is.character(train_anno)){ train_anno <- Rubrary::rread(train_anno) }
@@ -241,7 +279,7 @@ project_PCA <- function(
     )
     train_annotype <- "Type"
   }
-  
+
   train_plt <- Rubrary::plot_PCA(
     df_pca = train_pca,
     PCx = PCx, PCy = PCy,
@@ -258,7 +296,7 @@ project_PCA <- function(
       mapping = aes(x = .data[[PCx]], y = .data[[PCy]], group = ellipse),
       color = train_colors
     )}
-  
+
   if(!is.null(savedir)){
     ggsave(
       plot = train_plt,
@@ -268,7 +306,7 @@ project_PCA <- function(
   }
   # Rotate test data with train rotation mtx
   test_proj <- stats::predict(train_pca, newdata = t(test_df)) %>% as.data.frame()
-  
+
   # Varimax section
   if(varimax){
     ncomp <- 2 # Set as function arg?
@@ -290,7 +328,7 @@ project_PCA <- function(
         Type = train_name
       )
       train_annotype <- "Type"
-    }    
+    }
 
     train_plt_vm <- Rubrary::plot_PCA(
       df_pca = train_pca_vm$scores,
@@ -326,11 +364,11 @@ project_PCA <- function(
     test_proj <- test_proj %>%
       tibble::rownames_to_column(var = "Scores")
   }
-  
+
   if(!is.null(test_anno)){ # Test sample annotation present
     if(is.character(test_anno)){ test_anno <- Rubrary::rread(test_anno) } # Read if path
     # Filter to samples present
-    test_anno <- test_anno %>% 
+    test_anno <- test_anno %>%
       filter(!!as.symbol(test_annoname) %in% names(test_df))
     # Join
     test_proj_anno <- dplyr::left_join(
@@ -353,9 +391,9 @@ project_PCA <- function(
     nm = c(as.character(sort(unique(train_pc_anno[,train_annotype]))),
            as.character(sort(unique(test_proj_anno[,test_annotype])))),
     c(train_colors, test_colors))
-  
+
   vm_title <- ifelse(varimax, " Varimax", "")
-  
+
   suppressMessages(
   test_plt <- train_plt +
     geom_point(data = test_proj_anno,
@@ -369,7 +407,7 @@ project_PCA <- function(
     {if(varimax) ylab(PCy)} + # Overwrite w/ "V2"
     labs(title = paste0("PCA", vm_title, " - ", test_name, " Projected on ", train_name))
   )
-  
+
   if(!is.null(savedir)){
     vm_name <- ifelse(varimax, "_varimax", "")
     # Save scores
@@ -390,7 +428,7 @@ project_PCA <- function(
       height = height, width = width
     )
   }
-  
+
   if(test_only_plt){
     if(label[2]){
       label_test <- "Scores"
