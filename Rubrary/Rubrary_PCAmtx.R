@@ -1,4 +1,31 @@
 # Input ----
+## UCLAOV SCN
+## OVB5 SCN ----
+UCLA_OV_B12345_PCA <- Rubrary::run_PCA(
+  df = "/Users/liaoyj/Dropbox/Ovarian Project/log2_coding_expression_datasets/ovarian_ucla12345_rsem_genes_upper_norm_counts_coding_log2.txt",
+  center = T, scale = F,
+  # savename = "/Users/liaoyj/Library/CloudStorage/Dropbox/OV/Batch5/PCA/UCLA_OV_B12345_PCA"
+)
+
+ts_lvls <- c("Chemonaive", "Post-NACT", "Recurrent", "NA (CellLine)", "NA (Control)")
+ts_cols <- setNames(nm = ts_lvls,
+                    c(scales::hue_pal()(3), "grey30", "grey60"))
+UCLA_OV_anno <- Rubrary::rread("/Users/liaoyj/Library/CloudStorage/Dropbox/Ovarian Project/UCLA cohort information/UCLAOvarian_CombinedBatches_Annotation_v11.txt") %>%
+  mutate(TreatmentStatus = factor(TreatmentStatus, levels = ts_lvls))
+
+
+df_pca = UCLA_OV_B12345_PCA
+PCs = c(1:3)
+anno = UCLA_OV_anno
+annoname = "Sample_ID"
+annotype = "SCN_Score_Proj"
+colors = c("blue", "red")
+# annotype = "TreatmentStatus"
+# colors = unname(ts_cols)
+title = "UCLA OV 3D PCA - SCN"
+savename = "/Users/liaoyj/Dropbox/Rubrary/PCA_mtx/UCLAOV.png"
+width = 10
+height = 10
 
 ## Iris ----
 data(iris)
@@ -105,7 +132,7 @@ plot_PCA_matrix(
 plot_PCA_matrix <- function(
     df_pca, PCs = c(1:3), anno = NULL, annoname = "Sample", annotype = "Type",
     colors = NULL, title = NULL, savename = NULL, width = 8, height = 8) {
-  
+
   if (is.character(df_pca)) { # PCA results as path to txt
     dfpath <- df_pca
     df_pca <- Rubrary::rread(dfpath)
@@ -118,27 +145,27 @@ plot_PCA_matrix <- function(
     df <- df_pca$x %>%
       as.data.frame() %>%
       tibble::rownames_to_column(var = "Scores")
-    
+
     sdev <- df_pca$sdev %>%
       as.data.frame() %>%
       mutate(var = .^2,
              pve = round(var / sum(var) * 100, digits = 1)) %>%
       `rownames<-`(paste0("PC", rownames(.)))
-    
+
   } else { # PCA results directly as dataframe, no sdev
     df <- df_pca
     names(df)[1] <- "Scores"
   }
-  
+
   PCs <- paste0("PC", PCs)
   idx <- match(PCs, names(df))
-  
+
   if(exists("sdev")){
     PClabs <- paste0(PCs, " (", sdev$pve[match(PCs, rownames(sdev))], "%)")
   } else { PClabs <- PCs }
-  
+
   if (is.character(anno)) { anno <- Rubrary::rread(anno) }
-  
+
   if(!is.null(anno)){
     df <- df %>% left_join(., anno, by = stats::setNames(nm = "Scores", annoname))
     axlab = "show"
@@ -153,7 +180,7 @@ plot_PCA_matrix <- function(
     legpos = "none"
     if(is.null(colors)){ colors = "black" } else { colors = colors[1] }
   }
-  
+
   plt <- ggpairs(
     data = df, aes(color = .data[[annotype]], fill = .data[[annotype]]),
     columns = idx,
@@ -169,7 +196,7 @@ plot_PCA_matrix <- function(
     theme_classic() +
     theme(legend.position = legpos,
           panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5))
-  
+
   if(!is.null(savename)){
     ggsave(
       plot = plt,
@@ -179,3 +206,5 @@ plot_PCA_matrix <- function(
   }
   return(plt)
 }
+
+
