@@ -1,0 +1,1 @@
+perl /Users/liaoyj/Dropbox/Rubrary/UQnorm/quartile_norm.pl -c -1 -s 1 /Users/liaoyj/Dropbox/Rubrary/UQnorm/OV_Batch5_rsem_genes_raw_counts.txt -out /Users/liaoyj/Dropbox/Rubrary/UQnorm/OVB5_UQ_perl.txt

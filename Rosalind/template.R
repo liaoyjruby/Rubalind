@@ -1,6 +1,6 @@
 path <- dirname(rstudioapi::getSourceEditorContext()$path)
 problem <- tail(strsplit(path, "/")[[1]], n=1)
-setwd(paste0("~/Documents/Rosalind/", problem))
+setwd(paste0("~/Documents/Rubalind/Rosalind/", problem))
 
 # Problem Name
 samplepath <- paste0(problem, "_sample.txt")
