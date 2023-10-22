@@ -1,0 +1,47 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Library/CloudStorage/GoogleDrive-liaoyjruby@g.ucla.edu/My Drive/UBC/CPSC545/pyprobml"
+		}
+	],
+	"settings": {
+		"r.rterm.mac": "",
+		"r.rpath.mac": "/Users/liaoyj/mambaforge/envs/Rubalind/bin/R",
+		"r.bracketedPaste": true,
+		"terminal.integrated.profiles.osx": {
+
+
+			
+			"bash": {
+				"path": "bash",
+				"args": [
+					"-l"
+				],
+				"icon": "terminal-bash"
+			},
+			"zsh": {
+				"path": "zsh",
+				"args": [
+					"-l"
+				]
+			},
+			"fish": {
+				"path": "fish",
+				"args": [
+					"-l"
+				]
+			},
+			"tmux": {
+				"path": "tmux",
+				"icon": "terminal-tmux"
+			},
+			"pwsh": {
+				"path": "pwsh",
+				"icon": "terminal-powershell"
+			}
+		}
+	}
+}

@@ -40,3 +40,4 @@ vignettes/*.pdf
 
 /data/
 /Vignettes/cache/
+/tidymodels/
