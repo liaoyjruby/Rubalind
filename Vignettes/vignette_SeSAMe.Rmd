@@ -1,0 +1,231 @@
+
+# SeSAMe vignettes
+
+# Basic Usage & Preprocessing
+https://www.bioconductor.org/packages/release/bioc/vignettes/sesame/inst/doc/sesame.html
+
+## Preparation
+
+```{r}
+library(sesame)
+sesame_checkVersion()
+# sesameDataCache() # Cache annotation data, once per install/update
+tools::R_user_dir("ExperimentHub", which="cache") # Location of cached data on computer
+```
+
+## openSesame pipeline
+
+- end-to-end processing
+- converts IDATs to DNA methyl levels ($\beta$ value) matrices
+inputs:
+- path to dir w/ IDAT files
+- specific path(s) of IDAT file prefix, one for each IDAT pair
+- one or list of SigDF objs
+```{r IDAT directory openSesame}
+## The following use the idat_dir in system.file,
+## Replace it with your actual IDAT path
+idat_dir = system.file("extdata/", package = "sesameData")
+betas = openSesame(idat_dir, BPPARAM = BiocParallel::MulticoreParam(2))
+```
+
+openSesame function
+- searches IDAT files from directory (`searchIDATprefixes`)
+- read IDAT in as `SigDF` objs (`readIDATpair`)
+- preprocess signals (`prepSesame`)
+- convert to DNA methyl levels ($\beta$ cals, `getBetas`)
+
+```{r openSesame step by step}
+##  The above openSesame call is equivalent to:
+betas = do.call(cbind, BiocParallel::bplapply(
+    searchIDATprefixes(idat_dir), function(pfx) {
+        getBetas(prepSesame(readIDATpair(pfx), "QCDPB"))
+}, BPPARAM = BiocParallel::MulticoreParam(2)))
+
+## or even more explicitly (if one needs to control argument passed
+## to a specific preprocessing function)
+betas = do.call(cbind, BiocParallel::bplapply(
+    searchIDATprefixes(idat_dir), function(pfx) {
+        getBetas(noob(pOOBAH(dyeBiasNL(inferInfiniumIChannel(qualityMask(
+            readIDATpair(pfx)))))))
+}, BPPARAM = BiocParallel::MulticoreParam(2)))
+
+# Compare betas?
+Rubrary::plot_scatter(df = as.data.frame(betas), xval = "4207113116_A", yval = "4207113116_B")
+```
+
+```{r alt openSesame outputs}
+betas = openSesame(idat_dir, func = getBetas) # getBetas is the default
+sdfs = openSesame(idat_dir, func = NULL) # return SigDF list
+allele_freqs = openSesame(idat_dir, func = getAFs) # SNP allele frequencies
+sdfs = openSesame(sdfs, prep = "Q", func = NULL)   # take and return SigDFs
+```
+
+## Data Preprocessing
+`prepSesame`
+- takes single `SigDF` as input, returns processed `SigDF`
+- `prep=` arg: instruct `prepSesame` to preprocess signal intensity
+  - skip w/ `prep=""`
+  - if nonempty, selects preprocessing functions + specifies order of execution
+    - `prepSesame(sdf, "DB")` equivalent to `noob(dyeBiasNL(sdf))`
+  - choice of preprocessing functions + order of chaining is important
+
+[SeSAMe preprocessing recommendations](https://www.bioconductor.org/packages/release/bioc/vignettes/sesame/inst/doc/sesame.html#:~:text=Recommended%20Preprocessing)
+
+optimal preprocess strategy considerations
+1. array platform: some arrays don't have enough Infinium-I probes for bg estimation + dye bias correction, so bg subtraction may not be most optimal
+2. expected sample property: some samples mammalian bimodal methylation distribution, others global loss of methylation
+
+```{r prepSesame example}
+sdf = sesameDataGet('EPIC.1.SigDF')
+prepSesameList()            # Q:qualityMask; P:pOOBAH
+sdf_preped = openSesame(sdf, prep="DB", func=NULL)
+# D = dye bias correction
+# B = background subtraction
+```
+
+# Modeling
+https://zhou-lab.github.io/sesame/v1.18/modeling.html
+
+## Differential Methylation
+
+DNA methylation dependent on 1+ predictors
+- tissue, cell type, sex, age, tumor/normal, case/control, or combo
+- `DML` (differential methylation locus) function models $\beta$ vals (DNA methyl lvls) using mixed linear models
+- general supervised learning framework IDs CpG loci whose differential methylation associated w/ known co-variates
+- can be used for epigenome-wide association studies (EWAS)
+
+```{r Libraries}
+library(sesame)
+library(SummarizedExperiment)
+```
+
+Data: MM285 dataset of 10 mouse samples
+- diff tissues, ages, sexes
+- stored in `SummarizedExperiment` obj, w/ data mtx combined w/ column-wise metadata accessible w/ `colData`
+```{r Load data}
+se = sesameDataGet("MM285.10.SE.tissue")[1:1000,] # an arbitrary 1000 CpGs
+cd = as.data.frame(colData(se)); rownames(cd) = NULL
+cd # Annotation sheet
+```
+Need to exclude CpGs w/ missing levels / `NA`
+```{r Check NAs}
+se_ok = (checkLevels(assay(se), colData(se)$sex) &
+    checkLevels(assay(se), colData(se)$tissue))
+sum(se_ok)
+se = se[se_ok,]
+```
+
+If discrete contrast vars (ex. tissue, sex), consider explicitly turning to factor level w/ reference level
+
+ex. `Colon` as ref tissue, `Female` as ref sex
+```{r Factor discrete vars}
+colData(se)$tissue <- relevel(factor(colData(se)$tissue), "Colon")
+colData(se)$sex <- relevel(factor(colData(se)$sex), "Female")
+```
+
+model DNA mehtyl variation
+- use tissue + sex as covariates
+- call `DML` function
+  - R formula `~tissue + sex`
+  - fit DNA methyl reading to linear model
+  - perform slope test + goodness-of-fit test (F-test holding out each contrast variable)
+  - return results in `DMLSummary` obj
+```{r Call DML}
+smry = DML(se, ~tissue + sex) # Can parallelize w/ mc.cores arg
+smry
+```
+
+## Test interpretation
+
+`summaryExtractTest`: extract key test stat from `DMLSummary` obj, store in data frame
+- rows = CpGs/loci
+- cols = slopes + p-vals of each variable
+
+```{r summaryExtractTest}
+test_result = summaryExtractTest(smry)
+colnames(test_result) # the column names, show four groups of statistics
+head(test_result)
+```
+
+### Results columns
+- Est_*: The slope estimate (aka the β coefficient, not to be confused with the DNA methylation β-value though) for continuous variable. DNA methylation difference of the current level with respect to the reference level for nominal contrast variables. Each suffix is concatenated from the contrast variable name (e.g., tissue, sex) and the level name if the contrast variable is discrete (e.g, Cecum, Esophagus, Fat). For example, Est_tissueFat should be interpreted as the estimated methylation level difference of Fat compared to the reference tissue (which is Colon, as set above). If reference is not set, the first level in the alphabetic order is used as the reference level. There is a special column named Est_`(Intercept)`. It corresponds to the base-level methylation of the reference (in this case a Female Colon sample).
+- Pval_* : The unadjusted p-values of t-testing the slope. This represents the statistical significance of the methylation difference. For example, Pval_tissueFat tests whether Fat is significantly different from Colon (the reference level) in DNA methylation. The Pval_`(Intercept)` tests whether the reference level is significantly different from zero.
+- FPval_* : The unadjusted p-value of the F-test contrasting the full model against a reduced model with the labeled contrast variable held out. Note that “Pval_” and “FPval_” are equivalent when the contrast variable is a 2-level factor, i.e., in the case of a pairwise comparison.
+- Eff_* : The effect size of each normial contrast variable. This is equivalent to the maximum slope subtracted by the minimum level including the reference level (0).
+
+## Goodness of fit
+question: "Is the CpG methylation tissue-specific?
+- ask about contrast var as a while
+vs. "Is the CpG more methylated in fat compared to liver?
+- concert only specific level in contrast var
+
+- use F-test contrasting full model w/ reduced model / target held out
+- stat computed by default in `DML`, `FPval_` columns
+
+ex. all CpGs methylated specific to sex
+- 0.1 is effect size threshold: DNA methyl diff under 0.1 (10%) considered not biologically meaningful
+- assumption for homogenous cell comp, most cells either biallelically methylated, unmethylated, or monoallelically methylated
+- adjust threshold based on analysis scenarios
+```{r FPval sex}
+library(dplyr)
+library(tidyr)
+test_result %>% dplyr::filter(FPval_sex < 0.05, Eff_sex > 0.1) %>%
+    select(FPval_sex, Eff_sex)
+```
+ex. define CpG methyl as sex specific, tissue-specific, or both
+```{r}
+test_result %>%
+    mutate(sex_specific =
+        ifelse(FPval_sex < 0.05 & Eff_sex > 0.1, TRUE, FALSE)) %>%
+    mutate(tissue_specific =
+        ifelse(FPval_tissue < 0.05 & Eff_tissue > 0.1, TRUE, FALSE)) %>%
+    select(sex_specific, tissue_specific) %>% table
+```
+
+## Pairwise comparison
+
+ask if DNA methyl is diff btwn two sexes or two specific tissues
+
+ex. `Est_sexMale` compares male from female
+```{r volcano plot male}
+library(ggplot2)
+ggplot(test_result) + geom_point(aes(Est_sexMale, -log10(Pval_sexMale)))
+```
+
+ex. DNA methylation diff btwn fat + colon
+```{r volcano plot fat}
+ggplot(test_result) + geom_point(aes(Est_tissueFat, -log10(Pval_tissueFat)))
+```
+
+## Continuous predictors
+
+investigating `age` besides `sex`
+
+```{r DML continuous variable}
+smry2 = DML(se, ~ age + sex)
+test_result2 = summaryExtractTest(smry2) %>% arrange(Est_age)
+```
+
+```{r CpGs positively associated w/ age}
+test_result2 %>% dplyr::select(Probe_ID, Est_age, Pval_age) %>% tail
+
+df = data.frame(Age = colData(se)$age,
+    BetaValue = assay(se)[test_result2$Probe_ID[nrow(test_result2)],])
+ggplot(df, aes(Age, BetaValue)) + geom_smooth(method="lm") + geom_point()
+```
+
+## DMR: diff methyl regions
+
+- merge neighboring CpGs that show consistent mehtyl variation into diff methyl regions (DMRs)
+
+ex. merge sex-specific methyl to chromosome X regions that show X-inactivation-related methyl diff
+```{r DMR}
+dmContrasts(smry)# pick a contrast from below
+merged = DMR(se, smry, "sexMale", platform="MM285") # merge CpGs to regions
+merged %>% dplyr::filter(Seg_Pval_adj < 0.01)
+```
+
+
+
+
+

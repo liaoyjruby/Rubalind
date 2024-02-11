@@ -1,0 +1,44 @@
+
+# minfi User's Guide
+
+https://bioconductor.org/packages/release/bioc/vignettes/minfi/inst/doc/minfi.html
+
+```{r Load libraries}
+# BiocManager::install("minfi")
+# BiocManager::install("minfiData")
+library(minfi)
+library(minfiData)
+```
+
+## minfi classes
+```{r Example classes}
+RGsetEx
+## RGsetEx: RGChannelSet, 622,399 features
+# Each features is a probe!
+MsetEx <- preprocessRaw(RGsetEx)
+## MsetEx: MethylSet, 485,512 features
+# Each feature is a methylation locus
+GMsetEx <- mapToGenome(MsetEx)
+## GMsetEx: GenomicMethylSet, 485,512 features
+# Each features is methylation locus mapped to genome
+```
+
+## Read data
+
+Typical 450k daata
+- each slide (12 arrays) stored in separate directory
+  - IDAT files within
+- numeric name
+- top level directory has sample sheet file
+```{r List pkg files}
+baseDir <- system.file("extdata", package = "minfiData")
+list.files(baseDir)
+list.files(file.path(baseDir, "5723646052"))
+```
+
+```{r Read sample sheet}
+targets <- read.metharray.sheet(baseDir)
+targets
+```
+
+
